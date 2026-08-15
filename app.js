@@ -151,7 +151,7 @@ function canAccessScreen(screen) {
 
   const common = [
     "home", "more", "notifications", "profile", "globalSearch",
-    "reports", "monthlyReport", "managerLeaderboard"
+    "reports", "monthlyReport", "managerLeaderboard","geoInsights","geo-pricing-insights"
   ];
 
   if (common.includes(screen)) return true;
@@ -330,6 +330,9 @@ function render() {
         case "managers":
             html = renderManagersScreen();
             break;
+         case "geoInsights":
+             html = renderGeoInsights();
+             break;
 
         case "visitsList":
             html = renderVisitsList();
@@ -610,7 +613,9 @@ function renderSubHeader(s) {
     smartBucket: "Smart Buckets", discountRules: "Discount Rules", reports: "Reports",
     monthlyReport: "Monthly Analytics", notifications: "Notifications", profile: "My Profile",
     globalSearch: "Search", managerLeaderboard: "Team Leaderboard", team: "Team Performance",
-    performance: "Performance Analytics", managers: "Manager Performance"
+    performance: "Performance Analytics", managers: "Manager Performance",
+    geoInsights: "Geographic & Pricing Insights",
+
   };
 const params = s.params || {};
 
@@ -652,20 +657,20 @@ function toast(msg, tone = "success") {
 }
 function openSheet(html) {
   document.getElementById("overlay-slot").innerHTML = `
-    <div class="sheet-backdrop" onclick="if(event.target===this) closeOverlay()">
-      <div class="sheet-panel"><div class="sheet-handle"></div>${html}</div>
+    <div class="sheet-backdrop fullscreen-overlay" onclick="if(event.target===this) closeOverlay()">
+      <div class="sheet-panel fullscreen-panel"><div class="sheet-handle"></div>${html}</div>
     </div>`;
 }
 function openModal(html) {
   document.getElementById("overlay-slot").innerHTML = `
-    <div class="modal-backdrop-x" onclick="if(event.target===this) closeOverlay()">
-      <div class="modal-panel-x">${html}</div>
+    <div class="modal-backdrop-x fullscreen-overlay" onclick="if(event.target===this) closeOverlay()">
+      <div class="modal-panel-x fullscreen-panel">${html}</div>
     </div>`;
 }
 function openWideModal(html) {
   document.getElementById("overlay-slot").innerHTML = `
-    <div class="modal-backdrop-x" onclick="if(event.target===this) closeOverlay()">
-      <div class="modal-panel-x wide">${html}</div>
+    <div class="modal-backdrop-x fullscreen-overlay" onclick="if(event.target===this) closeOverlay()">
+      <div class="modal-panel-x wide fullscreen-panel">${html}</div>
     </div>`;
 }
 function closeOverlay() {
@@ -829,8 +834,15 @@ function renderHome() {
   return state.homeView === "today" ? renderHomeToday() : renderHomeMonth();
 }
 
-function metricCard(label, value, icon, note = "") {
-  return `<div class="kpi-card"><div class="kpi-icon"><i class="bi ${icon}"></i></div><div class="kpi-label">${label}</div><div class="kpi-value">${value}</div>${note ? `<div class="kpi-sub">${note}</div>` : ""}</div>`;
+function metricCard(label, value, icon, note = "", action = "") {
+  const clickable = action ? ` style="cursor:pointer;" onclick="${action}" role="button" tabindex="0"` : "";
+  return `<div class="kpi-card bi-clickable"${clickable}>
+    <div class="kpi-icon"><i class="bi ${icon}"></i></div>
+    <div class="kpi-label">${label}</div>
+    <div class="kpi-value">${value}</div>
+    ${note ? `<div class="kpi-sub">${note}</div>` : ""}
+    ${action ? `<div class="bi-card-hint"><i class="bi bi-arrow-right"></i> View details</div>` : ""}
+  </div>`;
 }
 
 function renderSalesManagerHome() {
@@ -853,6 +865,7 @@ function renderSalesManagerHome() {
       <div class="d-flex justify-content-between align-items-center mb-2"><div class="section-title">DSR Performance</div><button class="btn btn-crm-outline btn-sm" onclick="go('managerLeaderboard')">View All</button></div>
       ${top.map((d,i)=>`<div class="py-2 ${i?'border-top':''}"><div class="d-flex justify-content-between"><span class="fw-semibold" style="font-size:.82rem;">${d.name}</span><span class="fw-bold">${fmtINR(d.sales)}</span></div><div class="progress-track mt-2" style="height:6px;"><div class="progress-fill" style="width:${Math.min(d.sales/d.target*100,100)}%;background:var(--orange-500);"></div></div><div class="d-flex justify-content-between text-faint mt-1" style="font-size:.68rem;"><span>${fmtPct(d.sales/d.target*100)} achievement</span><span>${d.orders} orders · ${d.visits} visits</span></div></div>`).join("")}
     </div>
+    ${renderInsightsSection()}
     <div class="row g-2"><div class="col-6"><button class="btn btn-crm-primary w-100" onclick="go('reports')"><i class="bi bi-bar-chart-fill me-1"></i> Reports</button></div><div class="col-6"><button class="btn btn-crm-outline w-100" onclick="go('team')"><i class="bi bi-people-fill me-1"></i> My Team</button></div></div>
   </div>`;
 }
@@ -872,7 +885,8 @@ function renderRegionalManagerHome() {
       ${metricCard("DSRs", r.activeDSR, "bi-people-fill", "Active")}
       ${metricCard("Collections", fmtINR(r.collections), "bi-cash-coin", "Collected")}
     </div>
-    <div class="card-x p-3 mb-3"><div class="section-title mb-2">State Performance</div>${r.states.map((st,i)=>`<div class="py-2 ${i?'border-top':''}"><div class="d-flex justify-content-between"><span class="fw-semibold" style="font-size:.82rem;">${st.name}</span><span class="fw-bold">${fmtINR(st.sales)}</span></div><div class="progress-track mt-2" style="height:6px;"><div class="progress-fill" style="width:${Math.min(st.achievement,100)}%;background:var(--steel-500);"></div></div><div class="text-faint mt-1" style="font-size:.68rem;">${fmtPct(st.achievement)} achievement · Target ${fmtINR(st.target)}</div></div>`).join("")}</div>
+    <div class="card-x p-3 mb-3"><div class="section-title mb-2">State Performance</div>${r.states.map((st,i)=>`<div class="py-2 ${i?'border-top':''}" style="cursor:pointer;" onclick="showStateDrilldown('${st.name}')"><div class="d-flex justify-content-between"><span class="fw-semibold" style="font-size:.82rem;">${st.name}</span><span class="fw-bold">${fmtINR(st.sales)}</span></div><div class="progress-track mt-2" style="height:6px;"><div class="progress-fill" style="width:${Math.min(st.achievement,100)}%;background:var(--steel-500);"></div></div><div class="text-faint mt-1" style="font-size:.68rem;">${fmtPct(st.achievement)} achievement · Target ${fmtINR(st.target)}</div></div>`).join("")}</div>
+    ${renderInsightsSection()}
     <div class="row g-2"><div class="col-6"><button class="btn btn-crm-primary w-100" onclick="go('reports')">Regional Reports</button></div><div class="col-6"><button class="btn btn-crm-outline w-100" onclick="go('managers')">Managers</button></div></div>
   </div>`;
 }
@@ -893,6 +907,7 @@ function renderAdminHome() {
       ${metricCard("DSRs", a.dsr, "bi-people-fill", "Active field force")}
     </div>
     <div class="card-x p-3 mb-3"><div class="section-title mb-2">Management Overview</div><div class="row g-2"><div class="col-6"><div class="tone-steel-bg p-2 rounded-3"><div class="text-faint" style="font-size:.68rem;">Collections</div><div class="fw-bold">${fmtINR(a.collections)}</div></div></div><div class="col-6"><div class="tone-green-bg p-2 rounded-3"><div class="text-faint" style="font-size:.68rem;">Visit Compliance</div><div class="fw-bold">${a.visitCompliance}%</div></div></div></div></div>
+    ${renderInsightsSection()}
     <button class="btn btn-crm-primary w-100" onclick="go('reports')"><i class="bi bi-bar-chart-fill me-1"></i> Executive Reports</button>
   </div>`;
 }
@@ -1037,18 +1052,27 @@ function renderHomeMonth() {
     </div>
 
     <div class="kpi-grid mb-3">
-      <div class="kpi-card"><div class="kpi-icon tone-navy"><i class="bi bi-currency-rupee"></i></div><div class="kpi-value">₹42.0L</div><div class="kpi-label">Total Sales</div></div>
-      <div class="kpi-card"><div class="kpi-icon tone-orange-bg"><i class="bi bi-bag-check-fill"></i></div><div class="kpi-value">188</div><div class="kpi-label">Total Orders</div></div>
-      <div class="kpi-card"><div class="kpi-icon tone-steel-bg"><i class="bi bi-signpost-split-fill"></i></div><div class="kpi-value">212</div><div class="kpi-label">Total Visits</div></div>
-      <div class="kpi-card"><div class="kpi-icon tone-green-bg"><i class="bi bi-check2-all"></i></div><div class="kpi-value">196</div><div class="kpi-label">Completed Visits</div></div>
-      <div class="kpi-card"><div class="kpi-icon tone-orange-bg"><i class="bi bi-shop"></i></div><div class="kpi-value">21</div><div class="kpi-label">New Retailers</div></div>
-      <div class="kpi-card"><div class="kpi-icon tone-steel-bg"><i class="bi bi-tools"></i></div><div class="kpi-value">34</div><div class="kpi-label">New Mechanics</div></div>
-      <div class="kpi-card"><div class="kpi-icon tone-amber-bg"><i class="bi bi-person-lines-fill"></i></div><div class="kpi-value">28</div><div class="kpi-label">New Leads</div></div>
-      <div class="kpi-card"><div class="kpi-icon tone-red-bg"><i class="bi bi-exclamation-circle-fill"></i></div><div class="kpi-value">₹18.1L</div><div class="kpi-label">Outstanding</div></div>
+      ${metricCard("Total Sales", fmtINR(DSR.achieved), "bi-currency-rupee", `Target ${fmtINR(DSR.target)}`, "go('monthlyReport')")}
+      ${metricCard("Total Orders", "188", "bi-bag-check-fill", "Current month", "goTab('orders')")}
+      ${metricCard("Total Visits", "212", "bi-signpost-split-fill", "196 completed", "goTab('visits')")}
+      ${metricCard("Completed Visits", "196", "bi-check2-all", "92% compliance", "goTab('visits')")}
+      ${metricCard("New Retailers", "21", "bi-shop", "This month", "go('customersList',{type:'Retailer'})")}
+      ${metricCard("New Mechanics", "34", "bi-tools", "This month", "go('customersList',{type:'Mechanic'})")}
+      ${metricCard("New Leads", "28", "bi-person-lines-fill", "Pipeline", "go('leads')")}
+      ${metricCard("Outstanding", "₹18.1L", "bi-exclamation-circle-fill", "Collection risk", "showCreditRiskDrilldown()")}
     </div>
 
+    <div class="bi-action-grid mb-3">
+      <button class="bi-action-card" onclick="go('newOrderPickCustomer')"><i class="bi bi-bag-plus-fill"></i><span>New Order</span><small>Start selling</small></button>
+      <button class="bi-action-card" onclick="go('planVisit')"><i class="bi bi-calendar-plus-fill"></i><span>Plan Visit</span><small>Build today's route</small></button>
+      <button class="bi-action-card" onclick="go('reports')"><i class="bi bi-lightbulb-fill"></i><span>Business Insights</span><small>Find what needs action</small></button>
+      <button class="bi-action-card" onclick="go('geoInsights')"><i class="bi bi-diagram-3-fill"></i><span>Explore Business</span><small>Region → Customer → Product</small></button>
+    </div>
+
+    ${renderInsightsSection()}
+
     <div class="card-x p-3 mb-3">
-      <div class="section-title mb-2">Sales Trend <span class="link-sm" style="cursor:pointer;" onclick="go('monthlyReport')">Full Report</span></div>
+      <div class="section-title mb-2" style="cursor:pointer;" onclick="go('monthlyReport')">Sales Trend <span class="link-sm">Full Report</span></div>
       <div style="height:170px;"><canvas id="salesTrendChart"></canvas></div>
     </div>
 
@@ -1066,7 +1090,7 @@ function renderHomeMonth() {
       </div>
       <hr class="hr-x"/>
       ${ACCOUNT_TYPE_SALES.map(a => `
-        <div class="d-flex justify-content-between align-items-center mb-2" style="font-size:0.8rem;">
+        <div class="d-flex justify-content-between align-items-center mb-2" class="bi-list-clickable" style="font-size:0.8rem;cursor:pointer;" onclick="showAccountTypeDrilldown('${a.type}')">
           <div class="fw-semibold">${a.type}</div>
           <div class="text-end">
             <div>${fmtINR(a.sales)} <span class="text-faint">· ${a.orders} ord</span></div>
@@ -1082,33 +1106,31 @@ function renderHomeMonth() {
 function afterRenderHooks(screen, params) {
   if (screen === "home" && state.homeView === "month") {
     setTimeout(() => {
-      drawLineChart("salesTrendChart", WEEKLY_SALES.map(w => w.label), WEEKLY_SALES.map(w => w.value));
-      drawPieChart("accountPieChart", ACCOUNT_TYPE_SALES.map(a => a.type), ACCOUNT_TYPE_SALES.map(a => a.pct));
-    }, 0);
+      drawLineChart("salesTrendChart", WEEKLY_SALES.map(w => w.label), WEEKLY_SALES.map(w => w.value), () => go("monthlyReport"));
+drawPieChartClickable("accountPieChart", ACCOUNT_TYPE_SALES.map(a => a.type), ACCOUNT_TYPE_SALES.map(a => a.pct), showAccountTypeDrilldown);    }, 0);
   }
   if (screen === "monthlyReport") {
     setTimeout(() => {
-      drawLineChart("mrSalesChart", WEEKLY_SALES.map(w => w.label), WEEKLY_SALES.map(w => w.value));
+      drawLineChart("mrSalesChart", WEEKLY_SALES.map(w => w.label), WEEKLY_SALES.map(w => w.value), () => go("reports"));
       drawBarChart("mrVisitsChart", ["Planned","Completed","Skipped"], [212,196,16], ["#2C79AC","#1E9E5A","#D6483F"]);
-      drawPieChart("mrAccountChart", ACCOUNT_TYPE_SALES.map(a=>a.type), ACCOUNT_TYPE_SALES.map(a=>a.pct));
-      drawBarChart("mrFmsChart", ["Fast","Medium","Slow"], [62,28,10], ["#1E9E5A","#E8A23D","#D6483F"]);
+drawPieChartClickable("accountPieChart", ACCOUNT_TYPE_SALES.map(a => a.type), ACCOUNT_TYPE_SALES.map(a => a.pct), showAccountTypeDrilldown);      drawBarChart("mrFmsChart", ["Fast","Medium","Slow"], [62,28,10], ["#1E9E5A","#E8A23D","#D6483F"]);
     }, 0);
   }
   if (screen === "reports") {
     setTimeout(() => {
-      drawBarChart("repAccountChart", ACCOUNT_TYPE_SALES.map(a=>a.type), ACCOUNT_TYPE_SALES.map(a=>a.sales), ["#0B1F3A","#1E5F8C","#F2762E"]);
+      drawBarChart("repAccountChart", ACCOUNT_TYPE_SALES.map(a=>a.type), ACCOUNT_TYPE_SALES.map(a=>a.sales), ["#0B1F3A","#1E5F8C","#F2762E"], label => showAccountTypeDrilldown(label));
     }, 0);
   }
   if (screen === "reports") {
     setTimeout(() => {
-      if (document.getElementById("repManagerSalesChart")) drawBarChart("repManagerSalesChart", DSR_LEADERBOARD.map(d=>d.name.split(" ")[0]), DSR_LEADERBOARD.map(d=>d.sales), ["#0B1F3A","#1E5F8C","#F2762E"]);
-      if (document.getElementById("repRegionalChart")) drawBarChart("repRegionalChart", REGIONAL_SUMMARY.states.map(s=>s.name), REGIONAL_SUMMARY.states.map(s=>s.sales), ["#0B1F3A","#1E5F8C","#F2762E"]);
+      if (document.getElementById("repManagerSalesChart")) drawBarChart("repManagerSalesChart", DSR_LEADERBOARD.map(d=>d.name.split(" ")[0]), DSR_LEADERBOARD.map(d=>d.sales), ["#0B1F3A","#1E5F8C","#F2762E"], label => { const d=DSR_LEADERBOARD.find(x=>x.name.startsWith(label)); if(d) showDsrDrilldown(d.name); });
+      if (document.getElementById("repRegionalChart")) drawBarChart("repRegionalChart", REGIONAL_SUMMARY.states.map(s=>s.name), REGIONAL_SUMMARY.states.map(s=>s.sales), ["#0B1F3A","#1E5F8C","#F2762E"], label => showStateDrilldown(label));
       if (document.getElementById("repAdminChart")) drawBarChart("repAdminChart", ["West","North","South","East","Central"], [18400000,17600000,16200000,15100000,17300000], ["#0B1F3A","#1E5F8C","#F2762E"]);
     }, 0);
   }
   if (screen === "monthlyReport") {
     setTimeout(() => {
-      if (document.getElementById("mrRegionalChart")) drawBarChart("mrRegionalChart", REGIONAL_SUMMARY.states.map(s=>s.name), REGIONAL_SUMMARY.states.map(s=>s.sales), ["#0B1F3A","#1E5F8C","#F2762E"]);
+      if (document.getElementById("mrRegionalChart")) drawBarChart("mrRegionalChart", REGIONAL_SUMMARY.states.map(s=>s.name), REGIONAL_SUMMARY.states.map(s=>s.sales), ["#0B1F3A","#1E5F8C","#F2762E"], label => showStateDrilldown(label));
       if (document.getElementById("mrAdminChart")) drawBarChart("mrAdminChart", ["West","North","South","East","Central"], [18400000,17600000,16200000,15100000,17300000], ["#0B1F3A","#1E5F8C","#F2762E"]);
     }, 0);
   }
@@ -1127,27 +1149,28 @@ function afterRenderHooks(screen, params) {
   window.scrollTo(0,0);
 }
 
+
 /* ============================================================
    CHART HELPERS
    ============================================================ */
 let chartInstances = {};
 function destroyChart(id) { if (chartInstances[id]) { chartInstances[id].destroy(); delete chartInstances[id]; } }
-function drawLineChart(id, labels, data) {
+function drawLineChart(id, labels, data, onPointClick = null) {
   const el = document.getElementById(id); if (!el) return;
   destroyChart(id);
   chartInstances[id] = new Chart(el, {
     type: "line",
     data: { labels, datasets: [{ data, borderColor: "#F2762E", backgroundColor: "rgba(242,118,46,0.12)", fill: true, tension: 0.4, pointBackgroundColor: "#F2762E", pointRadius: 4 }] },
-    options: { plugins: { legend: { display: false } }, scales: { y: { ticks: { callback: v => "₹" + (v/100000).toFixed(1) + "L" }, grid: { color: "#EEF1F6" } }, x: { grid: { display: false } } } }
+    options: { plugins: { legend: { display: false } }, onClick: (evt,elements) => { if(elements.length && onPointClick) onPointClick(labels[elements[0].index],data[elements[0].index],elements[0].index); }, scales: { y: { ticks: { callback: v => "₹" + (v/100000).toFixed(1) + "L" }, grid: { color: "#EEF1F6" } }, x: { grid: { display: false } } } }
   });
 }
-function drawBarChart(id, labels, data, colors) {
+function drawBarChart(id, labels, data, colors, onBarClick = null) {
   const el = document.getElementById(id); if (!el) return;
   destroyChart(id);
   chartInstances[id] = new Chart(el, {
     type: "bar",
     data: { labels, datasets: [{ data, backgroundColor: colors, borderRadius: 6, maxBarThickness: 34 }] },
-    options: { plugins: { legend: { display: false } }, scales: { y: { grid: { color: "#EEF1F6" } }, x: { grid: { display: false } } } }
+    options: { plugins: { legend: { display: false } }, onClick: (evt,elements) => { if(elements.length && onBarClick) onBarClick(labels[elements[0].index],data[elements[0].index],elements[0].index); }, scales: { y: { grid: { color: "#EEF1F6" } }, x: { grid: { display: false } } } }
   });
 }
 function drawPieChart(id, labels, data) {
@@ -1754,7 +1777,7 @@ function productCardHTML(p) {
   <div class="prod-card mb-2" id="prod-${p.id}">
     <div class="d-flex gap-3">
       <div style="width:52px;height:52px;border-radius:12px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:1.5rem; flex-shrink:0;">${p.img}</div>
-      <div class="flex-grow-1">
+      <div class="flex-grow-1" onclick="showProductDrilldown('${p.id}')" style="cursor:pointer;">
         <div class="d-flex justify-content-between">
           <div class="fw-bold" style="font-size:0.84rem;">${p.name}</div>
           <span class="fms-badge fms-${p.fms}">${p.fms}</span>
@@ -2200,6 +2223,10 @@ function renderCustomerDetail(id, tab) {
 function renderCustomerTabContent(c, tab) {
   if (tab === "Overview") {
     const avail = c.creditLimit - c.outstanding;
+    const customerOrders = ORDERS.filter(o => o.customerId === c.id);
+    const customerOrderValue = customerOrders.reduce((sum,o) => sum + Number(o.amount || 0), 0);
+    const creditUtil = c.creditLimit ? (c.outstanding / c.creditLimit * 100) : 0;
+    const daysSinceOrder = c.lastOrder ? Math.max(0, Math.floor((Date.now() - new Date(c.lastOrder) ) / 86400000)) : 0;
     return `
     <div class="card-x p-3 mb-3">
       <div class="d-flex align-items-center gap-3">
@@ -2212,10 +2239,21 @@ function renderCustomerTabContent(c, tab) {
       </div>
     </div>
     <div class="row g-2 mb-3">
-      <div class="col-6"><div class="kpi-card"><div class="kpi-label">Monthly Sales</div><div class="kpi-value" style="font-size:1rem;">${fmtINR(c.salesThisMonth)}</div></div></div>
-      <div class="col-6"><div class="kpi-card"><div class="kpi-label">Avg Order Value</div><div class="kpi-value" style="font-size:1rem;">${fmtINR(c.avgOrderValue)}</div></div></div>
-      <div class="col-6"><div class="kpi-card"><div class="kpi-label">Last Order</div><div class="kpi-value" style="font-size:1rem;">${c.lastOrder}</div></div></div>
-      <div class="col-6"><div class="kpi-card"><div class="kpi-label">Last Visit</div><div class="kpi-value" style="font-size:1rem;">${c.lastVisit}</div></div></div>
+      <div class="col-6"><div class="kpi-card bi-clickable" onclick="go('customerDetail',{id:'${c.id}',tab:'Orders'})" style="cursor:pointer;"><div class="kpi-label">Monthly Sales</div><div class="kpi-value" style="font-size:1rem;">${fmtINR(c.salesThisMonth)}</div><div class="bi-card-hint">View orders</div></div></div>
+      <div class="col-6"><div class="kpi-card bi-clickable" onclick="go('customerDetail',{id:'${c.id}',tab:'Orders'})" style="cursor:pointer;"><div class="kpi-label">Avg Order Value</div><div class="kpi-value" style="font-size:1rem;">${fmtINR(c.avgOrderValue)}</div><div class="bi-card-hint">${customerOrders.length} orders</div></div></div>
+      <div class="col-6"><div class="kpi-card bi-clickable" onclick="go('customerDetail',{id:'${c.id}',tab:'Payments'})" style="cursor:pointer;"><div class="kpi-label">Credit Utilization</div><div class="kpi-value" style="font-size:1rem;">${creditUtil.toFixed(0)}%</div><div class="bi-card-hint">${fmtINR(avail)} available</div></div></div>
+      <div class="col-6"><div class="kpi-card bi-clickable" onclick="go('customerDetail',{id:'${c.id}',tab:'Visits'})" style="cursor:pointer;"><div class="kpi-label">Last Visit</div><div class="kpi-value" style="font-size:1rem;">${c.lastVisit}</div><div class="bi-card-hint">View activity</div></div></div>
+    </div>
+    <div class="card-x p-3 mb-3">
+      <div class="section-title mb-2">Business Opportunity</div>
+      <div class="row g-2">
+        <div class="col-6">${summaryRow("Order Value", fmtINR(customerOrderValue))}</div>
+        <div class="col-6">${summaryRow("Outstanding Ratio", `${creditUtil.toFixed(0)}%`)}</div>
+      </div>
+      <div class="d-flex gap-2 mt-2">
+        <button class="btn btn-crm-outline btn-sm flex-grow-1" onclick="showCustomerGapDrilldown('${c.id}')"><i class="bi bi-stars me-1"></i>Cross-sell</button>
+        <button class="btn btn-crm-outline btn-sm flex-grow-1" onclick="go('customerDetail',{id:'${c.id}',tab:'Payments'})"><i class="bi bi-cash-coin me-1"></i>Collections</button>
+      </div>
     </div>
     <button class="btn btn-crm-primary w-100" onclick="orderCustomerId='${c.id}'; go('newOrder', {customerId:'${c.id}'})">Start New Order</button>
     `;
@@ -2327,9 +2365,11 @@ function renderMore() {
       ["bi-percent", "Discount Rules", "go('discountRules')"],
       ["bi-file-earmark-text-fill", "Quotations", "go('quotations')"],
     ]},
-    { title: "Insights", items: [
+    { title: "Business Intelligence", items: [
+      ["bi-lightbulb-fill", "Business Insights", "go('reports')"],
       ["bi-bar-chart-fill", "Reports & Analytics", "go('reports')"],
       ["bi-trophy-fill", "Team Leaderboard", "go('managerLeaderboard')"],
+      ["bi-geo-alt-fill", "Geo & Pricing Insights", "go('geoInsights')"],
       ["bi-clock-history", "Order History", "go('orderHistory')"],
     ]},
     { title: "Account", items: [
@@ -2592,15 +2632,24 @@ function renderReportsHome() {
   return renderDSRReports();
 }
 
-function reportKpi(label, value, note, icon) {
-  return `<div class="card-x p-3"><div class="d-flex justify-content-between"><div><div class="text-faint" style="font-size:.68rem;">${label}</div><div class="fw-bold fs-5 mt-1">${value}</div><div class="text-faint" style="font-size:.65rem;">${note}</div></div><span class="nav-ic-wrap" style="background:var(--orange-100);color:var(--orange-600);"><i class="bi ${icon}"></i></span></div></div>`;
+
+function reportKpi(label, value, note, icon, action = "") {
+  const clickable = action ? ` style="cursor:pointer;" onclick="${action}" role="button" tabindex="0"` : "";
+  return `<div class="card-x p-3 bi-clickable"${clickable}>
+    <div class="d-flex justify-content-between"><div>
+      <div class="text-faint" style="font-size:.68rem;">${label}</div>
+      <div class="fw-bold fs-5 mt-1">${value}</div>
+      <div class="text-faint" style="font-size:.65rem;">${note}</div>
+    </div><span class="nav-ic-wrap" style="background:var(--orange-100);color:var(--orange-600);"><i class="bi ${icon}"></i></span></div>
+    ${action ? `<div class="bi-card-hint mt-2"><i class="bi bi-arrow-right"></i> Drill through</div>` : ""}
+  </div>`;
 }
 
 function renderTeamHome() {
   const rows = DSR_LEADERBOARD;
   return `<div class="section-pad">
     <div class="card-x p-3 mb-3"><div class="section-title">My Team</div><div class="text-faint mt-1">DSRs reporting to ${currentUser?.name || MANAGER.name}</div></div>
-    ${rows.map((d,i)=>`<div class="list-card mb-2"><div class="d-flex align-items-center gap-3"><span class="rank-badge ${i===0?'top':''}">${i+1}</span><div class="flex-grow-1"><div class="d-flex justify-content-between"><span class="fw-bold" style="font-size:.84rem;">${d.name}</span><span class="fw-bold">${fmtINR(d.sales)}</span></div><div class="progress-track mt-2" style="height:6px;"><div class="progress-fill" style="width:${Math.min(d.sales/d.target*100,100)}%;background:var(--orange-500);"></div></div><div class="d-flex justify-content-between text-faint mt-1" style="font-size:.68rem;"><span>${fmtPct(d.sales/d.target*100)} target</span><span>${d.orders} orders · ${d.visits} visits</span></div></div></div></div>`).join("")}
+        ${rows.map((d,i)=>`<div class="list-card mb-2" style="cursor:pointer;" onclick="showDsrDrilldown('${d.name}')"><div class="d-flex align-items-center gap-3"><span class="rank-badge ${i===0?'top':''}">${i+1}</span><div class="flex-grow-1"><div class="d-flex justify-content-between"><span class="fw-bold" style="font-size:.84rem;">${d.name}</span><span class="fw-bold">${fmtINR(d.sales)}</span></div><div class="progress-track mt-2" style="height:6px;"><div class="progress-fill" style="width:${Math.min(d.sales/d.target*100,100)}%;background:var(--orange-500);"></div></div><div class="d-flex justify-content-between text-faint mt-1" style="font-size:.68rem;"><span>${fmtPct(d.sales/d.target*100)} target</span><span>${d.orders} orders · ${d.visits} visits</span></div></div></div></div>`).join("")}
   </div>`;
 }
 
@@ -2613,10 +2662,13 @@ function renderManagersScreen() {
   ];
   return `<div class="section-pad">
     <div class="card-x p-3 mb-3"><div class="section-title">Regional Manager View</div><div class="text-faint mt-1">Manager-wise performance across the region</div></div>
-    ${managers.map((m,i)=>`<div class="list-card mb-2"><div class="d-flex justify-content-between"><div><div class="fw-bold">${m.name}</div><div class="text-faint" style="font-size:.7rem;">${m.territory} · ${m.dsr} DSRs</div></div><div class="text-end"><div class="fw-bold">${fmtINR(m.sales)}</div><div class="text-faint" style="font-size:.68rem;">${fmtPct(m.sales/m.target*100)}</div></div></div><div class="progress-track mt-2" style="height:6px;"><div class="progress-fill" style="width:${Math.min(m.sales/m.target*100,100)}%;background:var(--orange-500);"></div></div></div>`).join("")}
+    ${managers.map((m,i)=>`<div class="list-card mb-2 bi-list-clickable" onclick="showManagerDrilldown('${m.name}')" style="cursor:pointer;">
+      <div class="d-flex justify-content-between"><div><div class="fw-bold">${m.name}</div><div class="text-faint" style="font-size:.7rem;">${m.territory} · ${m.dsr} DSRs</div></div><div class="text-end"><div class="fw-bold">${fmtINR(m.sales)}</div><div class="text-faint" style="font-size:.68rem;">${fmtPct(m.sales/m.target*100)}</div></div></div>
+      <div class="progress-track mt-2" style="height:6px;"><div class="progress-fill" style="width:${Math.min(m.sales/m.target*100,100)}%;background:var(--orange-500);"></div></div>
+      <div class="bi-row-hint mt-2"><i class="bi bi-arrow-right"></i> View manager scorecard</div>
+    </div>`).join("")}
   </div>`;
 }
-
 function renderPerformanceScreen() {
   if (isRole(USER_ROLES.REGIONAL_MANAGER)) return renderRegionalManagerReports();
   if (isRole(USER_ROLES.ADMIN)) return renderAdminReports();
@@ -2627,13 +2679,15 @@ function renderSalesManagerReports() {
   const x = roleSalesSummary();
   return `<div class="section-pad">
     <div class="row g-2 mb-3">
-      <div class="col-6">${reportKpi("Team Sales", fmtINR(x.total), `${fmtPct(x.achievement)} of target`, "bi-currency-rupee")}</div>
-      <div class="col-6">${reportKpi("Orders", x.orders, "Team total", "bi-bag-check-fill")}</div>
-      <div class="col-6">${reportKpi("Visits", x.visits, "Field activity", "bi-signpost-split-fill")}</div>
-      <div class="col-6">${reportKpi("Collections", fmtINR(x.collection), "Collected", "bi-cash-coin")}</div>
+      <div class="col-6">${reportKpi("Team Sales", fmtINR(x.total), `${fmtPct(x.achievement)} of target`, "bi-currency-rupee", "go('monthlyReport')")}</div>
+      <div class="col-6">${reportKpi("Orders", x.orders, "Team total", "bi-bag-check-fill", "goTab('orders')")}</div>
+      <div class="col-6">${reportKpi("Visits", x.visits, "Field activity", "bi-signpost-split-fill", "goTab('visits')")}</div>
+      <div class="col-6">${reportKpi("Collections", fmtINR(x.collection), "Collected", "bi-cash-coin", "go('reports')")}</div>
     </div>
+        ${renderInsightsSection()}
+
     <div class="card-x p-3 mb-3"><div class="section-title mb-2">DSR Sales Performance</div><div style="height:190px;"><canvas id="repManagerSalesChart"></canvas></div></div>
-    <div class="card-x p-3 mb-3"><div class="section-title mb-2">Top Products</div>${TOP_PRODUCTS.map((p,i)=>`<div class="d-flex justify-content-between align-items-center py-2 ${i?'border-top':''}"><div><span class="rank-badge ${i===0?'top':''} me-2">${i+1}</span><span class="fw-semibold" style="font-size:.82rem;">${p.name}</span></div><span class="fw-bold">${fmtINR(p.sales)}</span></div>`).join("")}</div>
+    <div class="card-x p-3 mb-3"><div class="section-title mb-2">Top Products</div>${TOP_PRODUCTS.map((p,i)=>`<div class="d-flex justify-content-between align-items-center py-2 ${i?'border-top':''} bi-list-clickable" style="cursor:pointer;" onclick="const _p=getProductByName('${p.name}'); if(_p) showProductDrilldown(_p.id);"><div><span class="rank-badge ${i===0?'top':''} me-2">${i+1}</span><span class="fw-semibold" style="font-size:.82rem;">${p.name}</span></div><span class="fw-bold">${fmtINR(p.sales)}</span></div>`).join("")}</div>
     <div class="card-x p-3"><div class="section-title mb-2">Team Visit Compliance</div>${summaryRow("Planned Visits", "212")}${summaryRow("Completed", "196", "var(--green-600)")}${summaryRow("Skipped", "16", "var(--red-500)")}${summaryRow("Compliance Rate", "92%", null, true)}</div>
   </div>`;
 }
@@ -2642,11 +2696,13 @@ function renderRegionalManagerReports() {
   const r = REGIONAL_SUMMARY;
   return `<div class="section-pad">
     <div class="row g-2 mb-3">
-      <div class="col-6">${reportKpi("Regional Sales", fmtINR(r.sales), `${fmtPct(r.sales/r.target*100)} of target`, "bi-currency-rupee")}</div>
-      <div class="col-6">${reportKpi("Managers", r.activeManagers, "Active managers", "bi-diagram-3-fill")}</div>
-      <div class="col-6">${reportKpi("DSRs", r.activeDSR, "Active field force", "bi-people-fill")}</div>
-      <div class="col-6">${reportKpi("Collections", fmtINR(r.collections), "Collected", "bi-cash-coin")}</div>
+      <div class="col-6">${reportKpi("Regional Sales", fmtINR(r.sales), `${fmtPct(r.sales/r.target*100)} of target`, "bi-currency-rupee", "go('monthlyReport')")}</div>
+      <div class="col-6">${reportKpi("Managers", r.activeManagers, "Active managers", "bi-diagram-3-fill", "goTab('managers')")}</div>
+      <div class="col-6">${reportKpi("DSRs", r.activeDSR, "Active field force", "bi-people-fill", "go('managerLeaderboard')")}</div>
+      <div class="col-6">${reportKpi("Collections", fmtINR(r.collections), "Collected", "bi-cash-coin", "go('reports')")}</div>
     </div>
+        ${renderInsightsSection()}
+
     <div class="card-x p-3 mb-3"><div class="section-title mb-2">State-wise Sales</div><div style="height:200px;"><canvas id="repRegionalChart"></canvas></div></div>
     <div class="card-x p-3 mb-3"><div class="section-title mb-2">Manager Performance</div>${["Anita Kulkarni","Rahul Sharma","Neha Patil","Vikas More"].map((n,i)=>{const sales=[4200000,3820000,3410000,2950000][i],target=[5000000,4500000,4100000,3600000][i];return `<div class="py-2 ${i?'border-top':''}"><div class="d-flex justify-content-between"><span class="fw-semibold">${n}</span><span class="fw-bold">${fmtINR(sales)}</span></div><div class="progress-track mt-2" style="height:6px;"><div class="progress-fill" style="width:${Math.min(sales/target*100,100)}%;background:var(--steel-500);"></div></div><div class="text-faint mt-1" style="font-size:.68rem;">${fmtPct(sales/target*100)} achievement</div></div>`;}).join("")}</div>
     <div class="card-x p-3"><div class="section-title mb-2">Regional Compliance</div>${summaryRow("Visit Compliance", `${r.visitCompliance}%`, null, true)}${summaryRow("Orders", r.orders)}${summaryRow("Collections", fmtINR(r.collections))}</div>
@@ -2657,11 +2713,13 @@ function renderAdminReports() {
   const a = ADMIN_SUMMARY;
   return `<div class="section-pad">
     <div class="row g-2 mb-3">
-      <div class="col-6">${reportKpi("Company Sales", fmtINR(a.sales), `${fmtPct(a.sales/a.target*100)} of target`, "bi-currency-rupee")}</div>
-      <div class="col-6">${reportKpi("Orders", a.orders, "All India", "bi-bag-check-fill")}</div>
-      <div class="col-6">${reportKpi("Regions", a.regions, "Active regions", "bi-globe2")}</div>
-      <div class="col-6">${reportKpi("DSRs", a.dsr, "Active field force", "bi-people-fill")}</div>
+      <div class="col-6">${reportKpi("Company Sales", fmtINR(a.sales), `${fmtPct(a.sales/a.target*100)} of target`, "bi-currency-rupee", "go('monthlyReport')")}</div>
+      <div class="col-6">${reportKpi("Orders", a.orders, "All India", "bi-bag-check-fill", "goTab('orders')")}</div>
+      <div class="col-6">${reportKpi("Regions", a.regions, "Active regions", "bi-globe2", "go('geoInsights')")}</div>
+      <div class="col-6">${reportKpi("DSRs", a.dsr, "Active field force", "bi-people-fill", "go('managerLeaderboard')")}</div>
     </div>
+        ${renderInsightsSection()}
+
     <div class="card-x p-3 mb-3"><div class="section-title mb-2">Executive Sales Overview</div><div style="height:200px;"><canvas id="repAdminChart"></canvas></div></div>
     <div class="card-x p-3 mb-3"><div class="section-title mb-2">Company KPIs</div>${summaryRow("Target", fmtINR(a.target))}${summaryRow("Achieved", fmtINR(a.sales), "var(--green-600)")}${summaryRow("Collections", fmtINR(a.collections))}${summaryRow("Visit Compliance", `${a.visitCompliance}%`, null, true)}</div>
     <button class="btn btn-crm-primary w-100" onclick="toast('Executive report exported')"><i class="bi bi-download me-1"></i> Export Executive Report</button>
@@ -2678,7 +2736,7 @@ function renderDSRReports() {
         <div class="progress-fill" style="width:${Math.round(DSR.achieved/DSR.target*100)}%; background:var(--orange-500);"></div>
       </div>
     </div>
-
+   ${renderInsightsSection()}
     <div class="row g-2 mb-3">
       ${actionTile("bi-graph-up-arrow", "Monthly Report", "go('monthlyReport')")}
       ${actionTile("bi-trophy-fill", "Team Leaderboard", "go('managerLeaderboard')")}
@@ -2693,7 +2751,7 @@ function renderDSRReports() {
     <div class="card-x p-3 mb-3">
       <div class="section-title mb-2">Top Products</div>
       ${TOP_PRODUCTS.map((p,i) => `
-        <div class="d-flex justify-content-between align-items-center py-2 ${i>0?'border-top':''}">
+               <div class="d-flex justify-content-between align-items-center py-2 ${i>0?'border-top':''}" style="cursor:pointer;" onclick="const _p=getProductByName('${p.name}'); if(_p) showProductDrilldown(_p.id);">
           <div class="d-flex align-items-center gap-2">
             <span class="rank-badge ${i===0?'top':''}">${i+1}</span>
             <div>
@@ -2773,8 +2831,7 @@ function renderMonthlyReport() {
     <div class="card-x p-3">
       <div class="section-title mb-2">Top Performing Products</div>
       ${TOP_PRODUCTS.map((p,i) => `
-        <div class="d-flex justify-content-between align-items-center py-2 ${i>0?'border-top':''}">
-          <div class="d-flex align-items-center gap-2">
+        <div class="d-flex justify-content-between align-items-center py-2 ${i>0?'border-top':''}" style="cursor:pointer;" onclick="const _p=getProductByName('${p.name}'); if(_p) showProductDrilldown(_p.id);">          <div class="d-flex align-items-center gap-2">
             <span class="rank-badge ${i===0?'top':''}">${i+1}</span>
             <div class="fw-semibold" style="font-size:0.82rem;">${p.name}</div>
           </div>
@@ -3120,7 +3177,7 @@ function globalSearchResultsHTML(q) {
   }
   if (prods.length) {
     html += `<div class="eyebrow mb-2">Products (${prods.length})</div>` + prods.slice(0,5).map(p => `
-      <div class="list-card mb-2" onclick="go('newOrderPickCustomer')" style="cursor:pointer;">
+      <div class="list-card mb-2" onclick="showProductDrilldown('${p.id}')" style="cursor:pointer;">
         <div class="d-flex justify-content-between align-items-center">
           <div><div class="fw-semibold" style="font-size:0.84rem;">${p.name}</div><div class="text-faint mono" style="font-size:0.68rem;">${p.partNo}</div></div>
           <span class="fw-bold" style="font-size:0.82rem;">${fmtINR(p.dealerPrice)}</span>
@@ -3156,8 +3213,8 @@ function renderDSRManagerLeaderboard() {
       <div style="font-size:0.76rem; opacity:0.75;">Ranked by sales achieved this month</div>
     </div>
     ${DSR_LEADERBOARD.map(d => `
-      <div class="list-card mb-2 ${d.name===DSR.name?'':''}" style="${d.name===DSR.name?'border-color:var(--orange-500);':''}">
-        <div class="d-flex align-items-center gap-3">
+      <div class="list-card mb-2 ${d.name===DSR.name?'':''}" style="${d.name===DSR.name?'border-color:var(--orange-500);':''}cursor:pointer;" onclick="showDsrDrilldown('${d.name}')">
+              <div class="d-flex align-items-center gap-3">
           <span class="rank-badge ${d.rank===1?'top':''}">${d.rank}</span>
           <div class="flex-grow-1">
             <div class="d-flex justify-content-between align-items-center">
@@ -3182,4 +3239,4 @@ document.addEventListener("DOMContentLoaded", function () {
     } else {
         renderLogin();
     }
-});
+})
